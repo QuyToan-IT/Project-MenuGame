@@ -28,7 +28,7 @@ public class Game {
     @Column(nullable = false)
     private GameType type; 
 
-    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.MERGE})
     @JoinTable(
         name = "game_category",
         joinColumns = @JoinColumn(name = "game_id"),
