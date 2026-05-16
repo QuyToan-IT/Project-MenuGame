@@ -29,12 +29,16 @@ public class GameService {
     }
 
     public Game saveGame(Game game) {
-        // Nếu game có categories, hãy tìm chúng trong DB trước để tránh lỗi Detached Entity
-        if (game.getCategories() != null) {
+        // Giữ nguyên category IDs đã lưu nếu không có category mới nào được gửi
+        if (game.getId() != null && (game.getCategories() == null || game.getCategories().isEmpty())) {
+            gameRepository.findById(game.getId()).ifPresent(existing -> {
+                game.setCategories(existing.getCategories());
+            });
+        } else if (game.getCategories() != null) {
+            // Nếu có category mới, chuyển thành managed entities
             Set<Category> managedCategories = new HashSet<>();
             for (Category cat : game.getCategories()) {
                 if (cat.getId() != null) {
-                    // Lấy category "xịn" từ DB dựa trên ID mà frontend gửi lên
                     categoryRepository.findById(cat.getId()).ifPresent(managedCategories::add);
                 }
             }

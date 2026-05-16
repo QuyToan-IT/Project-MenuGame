@@ -5,7 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.util.Set;
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 
 @Entity
 @Table(name = "categories")
@@ -21,7 +21,10 @@ public class Category {
     @Column(nullable = false, unique = true)
     private String name;
 
+    @Column(columnDefinition = "TEXT DEFAULT ''")
+    private String description = "";
+
     @ManyToMany(mappedBy = "categories")
-    @JsonIgnore 
+    @JsonBackReference
     private Set<Game> games;
 }
