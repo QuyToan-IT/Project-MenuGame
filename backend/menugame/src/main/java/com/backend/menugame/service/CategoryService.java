@@ -1,12 +1,13 @@
 package com.backend.menugame.service;
 
-import com.backend.menugame.model.Category;
-import com.backend.menugame.repository.CategoryRepository;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Optional;
+import com.backend.menugame.model.Category;
+import com.backend.menugame.repository.CategoryRepository;
 
 @Service
 public class CategoryService {
@@ -31,7 +32,6 @@ public class CategoryService {
 
     // Xóa thể loại
     public void deleteCategory(Long id) {
-        // Trước khi xóa, cần kiểm tra xem Category có tồn tại không
         if (categoryRepository.existsById(id)) {
             categoryRepository.deleteById(id);
         }

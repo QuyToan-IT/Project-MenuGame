@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Zap, Shield, LayoutGrid, Users, Tags } from 'lucide-react';
+import { Zap, Shield, LayoutGrid, Tags } from 'lucide-react';
 import GameManagement from './GameManagement';
-import UserManagement from './UserManagement';
 import CategoryManagement from './CategoryManagement';
 
 export default function AdminPage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('games'); // 'games' | 'users'
+  const [activeTab, setActiveTab] = useState('games');
 
   return (
     <div className="flex h-screen bg-game-deep text-white overflow-hidden">
@@ -37,10 +36,6 @@ export default function AdminPage() {
             <Tags size={14} className={activeTab === 'categories' ? 'opacity-80' : 'opacity-50'} />
             Quản lý Thể loại
           </button>
-          <button onClick={() => setActiveTab('users')} className={`sidebar-link w-full text-left ${activeTab === 'users' ? 'active' : ''}`}>
-            <Users size={14} className={activeTab === 'users' ? 'opacity-80' : 'opacity-50'} />
-            Quản lý Tài khoản
-          </button>
           <button onClick={() => navigate('/')} className="sidebar-link w-full text-left">
             <LayoutGrid size={14} className="opacity-50" />
             Về trang chính
@@ -50,7 +45,7 @@ export default function AdminPage() {
 
       {/* ── Main ── */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {activeTab === 'games' ? <GameManagement /> : activeTab === 'users' ? <UserManagement /> : <CategoryManagement />}
+        {activeTab === 'games' ? <GameManagement /> : <CategoryManagement />}
       </div>
     </div>
   );
