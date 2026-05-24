@@ -7,12 +7,10 @@ import {
 } from 'lucide-react';
 import { StatCard, Field, inputCls } from './SharedComponents';
 
-/* ──────────────────────────────────────────────────────────────────────────
- * Mappers
- * ────────────────────────────────────────────────────────────────────────── */
 
 function mapBackendToAdmin(game, allCategories) {
-  let catName = '';
+  let mainCatName = '';
+  let subCatNames = [];
   const safeCategories = allCategories || [];
 
   const findCatNameById = (id) => {
@@ -21,67 +19,43 @@ function mapBackendToAdmin(game, allCategories) {
     return found ? found.name : '';
   };
 
-  if (game.categories) {
-    const firstCat = Array.isArray(game.categories)
-      ? game.categories[0]
-      : [...game.categories][0];
-    if (firstCat) {
-      if (typeof firstCat === 'object') {
-        catName = firstCat.name || findCatNameById(firstCat.id);
-      } else {
-        catName = findCatNameById(firstCat);
-      }
+  if (game.categories && (Array.isArray(game.categories) || typeof game.categories === 'object')) {
+    const categoriesArray = Array.isArray(game.categories) ? game.categories : [...game.categories];
+    
+    if (categoriesArray[0]) {
+      mainCatName = typeof categoriesArray[0] === 'object' ? categoriesArray[0].name : findCatNameById(categoriesArray[0]);
+    }
+    
+    if (categoriesArray.length > 1) {
+      subCatNames = categoriesArray.slice(1).map(c => typeof c === 'object' ? c.name : findCatNameById(c)).filter(Boolean);
     }
   }
 
-  if (!catName && game.category !== undefined && game.category !== null) {
-    if (typeof game.category === 'object') {
-      catName = game.category.name || findCatNameById(game.category.id);
-    } else if (typeof game.category === 'string' && isNaN(Number(game.category))) {
-      catName = game.category;
-    } else {
-      catName = findCatNameById(game.category);
-    }
-  }
-
-  if (!catName && game.categoryId) {
-    catName = findCatNameById(game.categoryId);
-  }
-
-  if (!catName && game.category_id) {
-    catName = findCatNameById(game.category_id);
-  }
-
-  if (!catName && game.categoryIds && Array.isArray(game.categoryIds) && game.categoryIds.length > 0) {
-    catName = findCatNameById(game.categoryIds[0]);
+  if (!mainCatName && game.category) {
+    mainCatName = typeof game.category === 'object' ? game.category.name : (isNaN(Number(game.category)) ? game.category : findCatNameById(game.category));
   }
 
   return {
     id:        game.id,
     title:     game.name      || game.title  || 'Không có tên',
     image:     game.imageUrl  || game.iconUrl || game.image || '',
-    category:  catName,
+    category:  mainCatName || 'Chưa có',
     rating:    game.rating ?? 0,
     gameType:  game.type || game.gameType || 'ONLINE',
+    mainCategory: mainCatName,
+    subCategories: subCatNames
   };
 }
 
-/**
- * Convert frontend form data to backend Game shape.
- * `gameCategories` is the full list fetched from GET /api/categories so we
- * can look up the selected category name → { id, name } object.
- */
+
 function mapAdminToBackend(game, gameCategories) {
-  const catName = game.category;
-  let catObj  = (gameCategories || []).find((c) => c.name === catName);
+  const allSelectedNames = [game.mainCategory, ...(game.subCategories || [])]
+    .filter((name, index, self) => name && self.indexOf(name) === index);
 
-  // Fallback: Đảm bảo không bao giờ gửi mảng categories rỗng nếu có sẵn danh sách
-  if (!catObj && gameCategories && gameCategories.length > 0) {
-    catObj = gameCategories[0];
-  }
-
-  // Làm sạch Object trước khi gửi để tránh bị Backend từ chối do dư thừa metadata
-  const cleanCat = catObj ? { id: catObj.id, name: catObj.name } : null;
+  const cleanCategories = (gameCategories || [])
+    .filter(c => allSelectedNames.includes(c.name))
+    .sort((a, b) => allSelectedNames.indexOf(a.name) - allSelectedNames.indexOf(b.name))
+    .map(c => ({ id: c.id, name: c.name }));
 
   return {
     id:         game.id,
@@ -92,32 +66,43 @@ function mapAdminToBackend(game, gameCategories) {
     image:      game.image,
     type:       game.gameType || 'ONLINE',
     gameType:   game.gameType || 'ONLINE',
-    // Cover tất cả các style Request Params / Body mà Backend có thể yêu cầu
-    categories:  cleanCat ? [cleanCat] : [],
-    category:    cleanCat,
-    categoryId:  cleanCat ? cleanCat.id : null,
-    category_id: cleanCat ? cleanCat.id : null,
-    categoryIds: cleanCat ? [cleanCat.id] : [],
+    categories: cleanCategories, // Gửi mảng chuẩn thứ tự xuống DB
+    category:   cleanCategories[0] || null,
+    categoryId: cleanCategories[0] ? cleanCategories[0].id : null,
+    category_id: cleanCategories[0] ? cleanCategories[0].id : null,
+    categoryIds: cleanCategories.map(c => c.id),
   };
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
- * GameFormModal  (receives all categories fetched from backend)
- * ────────────────────────────────────────────────────────────────────────── */
 
 function GameFormModal({ mode, game, gameCategories, onSave, onClose }) {
   const [form, setForm] = useState(() => {
     const defaultCat = (gameCategories && gameCategories.length > 0) ? gameCategories[0].name : '';
     if (game) {
-      return { ...game, category: game.category || defaultCat };
+      return { 
+        ...game, 
+        mainCategory: game.mainCategory || defaultCat,
+        subCategories: game.subCategories || [],
+        gameType: game.gameType || 'ONLINE'
+      };
     }
-    return { title: '', image: '', category: defaultCat, gameType: 'ONLINE' };
+    return { title: '', image: '', mainCategory: defaultCat, subCategories: [], gameType: 'ONLINE' };
   });
   const [errors, setErrors] = useState({});
 
   const set = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
+
+  // Xử lý bật/tắt checkbox thể loại phụ
+  const handleSubCategoryToggle = (catName) => {
+    const currentSubs = Array.isArray(form.subCategories) ? form.subCategories : [];
+    if (currentSubs.includes(catName)) {
+      set('subCategories', currentSubs.filter(name => name !== catName));
+    } else {
+      set('subCategories', [...currentSubs, catName]);
+    }
   };
 
   const validate = () => {
@@ -128,16 +113,17 @@ function GameFormModal({ mode, game, gameCategories, onSave, onClose }) {
     } else if (!/^https?:\/\//i.test(form.image.trim())) {
       e.image = 'Vui lòng nhập URL ảnh hợp lệ (bắt đầu bằng http:// hoặc https://)';
     }
+    if (!form.mainCategory) e.mainCategory = 'Vui lòng chọn thể loại chính';
     return e;
   };
-
-  const catOptions = gameCategories || [];
 
   const handleSave = () => {
     const e = validate();
     if (Object.keys(e).length) { setErrors(e); return; }
     onSave({ ...form });
   };
+
+  const subCatOptions = (gameCategories || []).filter(c => c.name !== form.mainCategory);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -151,16 +137,18 @@ function GameFormModal({ mode, game, gameCategories, onSave, onClose }) {
             <X size={16} />
           </button>
         </div>
-        <div className="px-6 py-5 space-y-4">
+        
+        <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto scrollbar-hidden">
           {form.image && (
             <div className="w-full h-36 rounded-xl overflow-hidden border border-white/[0.06] bg-game-card">
               <img
                 src={form.image} alt="preview"
                 className="w-full h-full object-cover"
-              onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80&w=400'; }}
+                onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&q=80&w=400'; }}
               />
             </div>
           )}
+          
           <Field label="Tên game" error={errors.title}>
             <input
               type="text" value={form.title}
@@ -169,6 +157,7 @@ function GameFormModal({ mode, game, gameCategories, onSave, onClose }) {
               className={inputCls(errors.title)}
             />
           </Field>
+          
           <Field label="Ảnh (URL)" error={errors.image}>
             <input
               type="url" value={form.image}
@@ -177,18 +166,46 @@ function GameFormModal({ mode, game, gameCategories, onSave, onClose }) {
               className={inputCls(errors.image)}
             />
           </Field>
-          <Field label="Thể loại">
+          
+          <Field label="Thể loại chính (Hiện nhãn ở trang chủ)" error={errors.mainCategory}>
             <select
-              value={form.category}
-              onChange={(e) => set('category', e.target.value)}
-              className={inputCls()}
+              value={form.mainCategory}
+              onChange={(e) => {
+                const newMain = e.target.value;
+                const filteredSubs = (form.subCategories || []).filter(name => name !== newMain);
+                setForm(prev => ({ ...prev, mainCategory: newMain, subCategories: filteredSubs }));
+              }}
+              className={inputCls(errors.mainCategory)}
             >
-              {catOptions.map((c) => (
+              {(gameCategories || []).map((c) => (
                 <option key={c.id} value={c.name} className="bg-game-surface">
                   {c.name}
                 </option>
               ))}
             </select>
+          </Field>
+
+          <Field label="Các thể loại phụ (Tùy chọn bổ sung để lọc)">
+            {subCatOptions.length === 0 ? (
+              <p className="text-xs text-game-muted italic mt-1">Không có thêm thể loại phụ nào khả dụng</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2.5 p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl mt-1">
+                {subCatOptions.map((c) => {
+                  const isChecked = Array.isArray(form.subCategories) && form.subCategories.includes(c.name);
+                  return (
+                    <label key={c.id} className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-white/[0.01] border border-white/[0.03] cursor-pointer hover:bg-white/[0.05] transition-all select-none">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => handleSubCategoryToggle(c.name)}
+                        className="rounded border-white/20 bg-game-surface text-game-neon focus:ring-0 focus:ring-offset-0 w-4 h-4"
+                      />
+                      <span className="text-xs text-white/80 font-medium">{c.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </Field>
 
           <Field label="Loại game">
@@ -199,9 +216,11 @@ function GameFormModal({ mode, game, gameCategories, onSave, onClose }) {
             >
               <option value="ONLINE" className="bg-game-surface">Online</option>
               <option value="OFFLINE" className="bg-game-surface">Offline</option>
+              <option value="OTHERS" className="bg-game-surface">Khác</option>
             </select>
           </Field>
         </div>
+        
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/[0.06]">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm font-medium text-game-muted hover:text-white hover:bg-white/[0.06] transition-all">Hủy</button>
           <button
@@ -216,9 +235,6 @@ function GameFormModal({ mode, game, gameCategories, onSave, onClose }) {
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
- * DeleteConfirmModal
- * ────────────────────────────────────────────────────────────────────────── */
 
 function DeleteConfirmModal({ game, onConfirm, onClose }) {
   return (
@@ -246,28 +262,21 @@ function DeleteConfirmModal({ game, onConfirm, onClose }) {
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
- * GameManagement
- * ────────────────────────────────────────────────────────────────────────── */
 
 export default function GameManagement() {
   const navigate = useNavigate();
 
-  /* data */
   const [rawGames,        setRawGames]         = useState([]);
   const [gameCategories,  setGameCategories]    = useState([]);
   const [search,          setSearch]            = useState('');
   const [loading,         setLoading]           = useState(true);
   const [error,           setError]             = useState(null);
 
-  /* modal state */
   const [modal,         setModal]           = useState(null);
   const [deleteTarget,  setDeleteTarget]    = useState(null);
 
-  /* derived */
   const games = useMemo(() => (rawGames || []).map(g => mapBackendToAdmin(g, gameCategories)), [rawGames, gameCategories]);
 
-  /* ── load games + categories from backend on mount ─────────────────────── */
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -295,7 +304,6 @@ export default function GameManagement() {
   );
   const categoryCount = useMemo(() => new Set(games.map((g) => g.category)).size, [games]);
 
-  /* ── CRUD ──────────────────────────────────────────────────────────────── */
   const handleAdd = () =>
     setModal({ mode: 'add', game: null });
 
@@ -310,7 +318,6 @@ export default function GameManagement() {
       } else {
         await updateGame(formData.id, backendData);
       }
-      // Lấy lại danh sách mới nhất từ Backend để đảm bảo dữ liệu relationship (Thể loại) được parse chính xác
       const freshGames = await getGames();
       setRawGames(Array.isArray(freshGames) ? freshGames : []);
       setModal(null);
@@ -329,7 +336,6 @@ export default function GameManagement() {
     }
   }, [rawGames]);
 
-  /* ── render ────────────────────────────────────────────────────────────── */
   return (
     <>
       <header className="shrink-0 h-16 flex items-center gap-4 px-6 border-b border-white/[0.05] bg-game-surface/60 backdrop-blur-xl">
@@ -386,7 +392,7 @@ export default function GameManagement() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/[0.06]">
-                      {['STT', 'Game', 'Thể loại', 'Loại', 'Hành động'].map((h) => (
+                      {['STT', 'Game', 'Thể loại chính', 'Loại', 'Hành động'].map((h) => (
                         <th key={h} className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-widest text-game-muted whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
@@ -416,10 +422,16 @@ export default function GameManagement() {
                             </div>
                           </td>
                           <td className="px-4 py-3">
-                            <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-game-neon/10 text-game-neon border border-game-neon/20">{game.category || 'Chưa có'}</span>
+                            <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-game-neon/10 text-game-neon border border-game-neon/20">{game.category}</span>
                           </td>
                           <td className="px-4 py-3">
-                            <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${game.gameType === 'ONLINE' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-purple-500/10 text-purple-400 border-purple-500/20'}`}>
+                            <span className={`text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                              game.gameType === 'ONLINE' 
+                                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' 
+                                : game.gameType === 'OFFLINE'
+                                ? 'bg-purple-500/10 text-purple-400 border-purple-500/20'
+                                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            }`}>
                               {game.gameType}
                             </span>
                           </td>
@@ -455,7 +467,7 @@ export default function GameManagement() {
           game={modal.game}
           gameCategories={gameCategories}
           onSave={handleSave}
-          onClose={() => setModal(null)}
+          onClose={() => setModal(null)} 
         />
       )}
       {deleteTarget && (
