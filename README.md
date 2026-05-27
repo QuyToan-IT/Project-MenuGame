@@ -20,7 +20,7 @@
 ## 🚀 Hướng Dẫn Cài Đặt & Khởi Chạy Local
 
 ### Bước 1: Chuẩn bị Cơ sở dữ liệu (MySQL)
-* Mở MySQL Workbench và vào connections của bạn. Vì dự án đã được cấu hình tự động hóa hoàn toàn ở cả 2 tầng. Bạn không cần phải vào MySQL Workbench tạo database hay gõ lệnh import dữ liệu bằng tay.
+* Mở MySQL Workbench và vào connections của bạn. Vì dự án đã được cấu hình tự động hóa hoàn toàn ở cả 2 tầng. Bạn không cần phải tạo database hay gõ lệnh import dữ liệu bằng tay.
 * Nhờ tham số `createDatabaseIfNotExist=true` trong chuỗi kết nối và cấu hình tự động chạy script, hệ thống sẽ tự nhận diện, khởi tạo database `menu_game`, dựng cấu trúc các bảng và nạp sẵn toàn bộ dữ liệu game mẫu (Liên Minh, Valorant, Roblox, Wukong...) ngay trong lần đầu tiên khởi chạy Backend.
 
 ### Bước 2: Cấu hình Tài khoản kết nối
