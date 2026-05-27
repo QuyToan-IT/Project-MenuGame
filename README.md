@@ -34,6 +34,6 @@ mvnw spring-boot:run
 
 ### Khởi chạy frontend
 ```bash
-cd frontend
+cd frontend/frontend-menugame
 npm install
 npm run dev
