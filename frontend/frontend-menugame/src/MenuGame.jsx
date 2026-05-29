@@ -1,15 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import './MenuGame.css';
 import { getGames, getCategories } from './api';
 import {
   Play,
   Search,
   Gamepad2,
-  Heart,
-  HardDrive,
-  Store,
   Zap,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -21,25 +20,15 @@ function toUiGame(game) {
     title: game.name || game.title || 'Không có tên',
     image: game.iconUrl || game.image || '',
     
-    // Thể loại chính hiển thị nhãn (phần tử đầu tiên)
+    // Thể loại chính hiển thị nhãn (luôn là phần tử đầu tiên)
     category: categories[0]?.name || 'Unknown', 
     
-    // ĐA SỬA ĐỔI: Lưu trữ mảng toàn bộ tên thể loại (bao gồm cả chính và phụ) để chạy logic lọc
+    // Lưu trữ mảng toàn bộ tên thể loại để phục vụ logic lọc ở Sidebar
     allCategoryNames: categories.map((c) => c.name), 
     categoryIds: categories.map((c) => c.id),
     gameType: game.type || game.gameType || 'ONLINE',
   };
 }
-
-/* ── static fallback featured content (shown only when DB has < 3 games) ─── */
-const FALLBACK_FEATURED = {
-  title: 'Black Myth: Wukong',
-  description:
-    'Khám phá thế giới huyền thoại Tây Du Ký trong tựa game hành động AAA đẳng cấp thế giới. Hóa thân thành Tề Thiên Đại Thánh, chiến đấu với thần linh và quái vật.',
-  image:
-    'https://images.pexels.com/photos/28122495/pexels-photo-28122495.jpeg?auto=compress&cs=tinysrgb&w=1400',
-  category: 'Action',
-};
 
 /* ── component ───────────────────────────────────────────────────────────── */
 
@@ -49,7 +38,6 @@ function GameCard({ game, onLaunch }) {
       onClick={() => onLaunch(game.title)} 
       className="card-hover group flex flex-col rounded-xl overflow-hidden bg-game-card border border-white/[0.04] p-2 cursor-pointer transition-all duration-300 hover:bg-white/[0.08]"
     >
-      
       {/* 1. Phần Ảnh / Icon */}
       <div className="relative aspect-[4/3] w-full rounded-lg overflow-hidden bg-game-surface shrink-0">
         <img
@@ -69,13 +57,12 @@ function GameCard({ game, onLaunch }) {
         </div>
       </div>
 
-      {/* 2. Phần Tên Game (Chữ căn vào chính giữa khung) */}
+      {/* 2. Phần Tên Game */}
       <div className="flex flex-col flex-1 pt-2 pb-1 px-1 justify-center items-center text-center">
         <h3 className="font-bold text-xs text-white/90 leading-tight tracking-wide group-hover:text-game-neon transition-colors line-clamp-2 min-h-[2rem] flex items-center justify-center">
           {game.title}
         </h3>
       </div>
-
     </div>
   );
 }
@@ -122,6 +109,9 @@ export default function MenuGame() {
   const [error, setError] = useState(null);
 
   const [launchingGame, setLaunchingGame] = useState(null);
+  
+  // State quản lý vị trí Slide game đang hiển thị trên Banner
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
 
   const handleLaunchGame = (title) => {
     setLaunchingGame(title);
@@ -159,10 +149,55 @@ export default function MenuGame() {
     };
   }, []);
 
-  /* ── featured game ──────────────────────────────────────────────────────── */
-  const featuredGameBase =
-    games.find((g) => g.featured) ?? games[0] ?? FALLBACK_FEATURED;
-  const featuredGame = { ...featuredGameBase, rating: featuredGameBase.rating || 4.9 };
+  /* ── ĐA SỬA ĐỔI: TỰ ĐỘNG GOM MỖI THỂ LOẠI 1 GAME VÀ ĐÍNH MÔ TẢ GỐC THỂ LOẠI MỚI ─── */
+  const bannerGames = useMemo(() => {
+    const uniqueGames = [];
+    const seenCategories = new Set();
+
+    for (const game of games) {
+      // Bỏ qua danh mục "Khác" không đưa lên banner
+      if (game.category === 'Khác') continue;
+
+      if (!seenCategories.has(game.category)) {
+        seenCategories.add(game.category);
+        
+        // ĐA SỬA ĐỔI: Tìm mô tả gốc của Thể loại này từ mảng categories lấy từ API
+        const matchedCatInfo = categories.find(c => c.name === game.category);
+        
+        uniqueGames.push({
+          ...game,
+          // Đè mô tả gốc của thể loại xuống làm description hiển thị dưới tên game trên banner
+          description: matchedCatInfo?.description || 'Chưa có mô tả chi tiết cho danh mục thể loại này.'
+        });
+      }
+    }
+    return uniqueGames;
+  }, [games, categories]);
+
+  /* ── ĐA SỬA ĐỔI: TỰ ĐỘNG CHẠY SLIDE BANNER (HỦY KHI BỊ BẤM CLICK CHUYỂN THỦ CÔNG) ─── */
+  useEffect(() => {
+    if (bannerGames.length <= 1) return;
+
+    const interval = setInterval(() => {
+      setCurrentSlideIndex((prevIndex) => (prevIndex + 1) % bannerGames.length);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [bannerGames]);
+
+  // Hàm xử lý bấm nút mũi tên dịch chuyển Slide thủ công
+  const handlePrevSlide = (e) => {
+    e.stopPropagation();
+    setCurrentSlideIndex((prev) => (prev === 0 ? bannerGames.length - 1 : prev - 1));
+  };
+
+  const handleNextSlide = (e) => {
+    e.stopPropagation();
+    setCurrentSlideIndex((prev) => (prev === bannerGames.length - 1 ? 0 : prev + 1));
+  };
+
+  /* ── featured game lấy theo vị trí slide hiện tại ───────────────────────── */
+  const featuredGame = bannerGames[currentSlideIndex] || null;
 
   /* ── sidebar category list ───────────────────────────────────────────────── */
   const sidebarCategories = ['Tất cả', ...categories.map((c) => c.name)];
@@ -175,12 +210,10 @@ export default function MenuGame() {
     { label: 'Khác', value: 'OTHERS' }
   ];
 
-  /* ── KẾT HỢP LỌC: Thể loại (Chính + Phụ) + Kiểu game từ Backend + Ô Tìm kiếm ─── */
+  /* ── KẾT HỢP LỌC GRID GAME PHÍA DƯỚI ─────────────────────────────────────── */
   const filteredGames = games.filter((g) => {
-    // ĐÃ SỬA ĐỔI: Kiểm tra xem thể loại đang chọn có nằm trong mảng (Thể loại chính + Thể loại phụ) của game không
     const gameCats = g.allCategoryNames || [];
     const matchCat = activeCategory === 'Tất cả' || gameCats.includes(activeCategory);
-    
     const matchType = activeType === 'Tất cả' || String(g.gameType).toUpperCase() === String(activeType).toUpperCase();
     const matchSearch = (g.title || '').toLowerCase().includes((searchTerm || '').toLowerCase());
     
@@ -189,7 +222,7 @@ export default function MenuGame() {
 
   return (
     <div className="flex h-screen bg-game-deep text-white overflow-hidden">
-      {/* ── Sidebar (Không chứa dấu mũi tên) ───────────────────── */}
+      {/* ── Sidebar ───────────────────── */}
       <aside className="hidden md:flex flex-col w-64 shrink-0 bg-game-sidebar border-r border-white/[0.05] overflow-y-auto scrollbar-hidden">
         {/* Logo */}
         <div className="px-5 py-6 flex items-center gap-3">
@@ -240,14 +273,14 @@ export default function MenuGame() {
 
         {/* Main Library View */}
         <main className="flex-1 overflow-y-auto scrollbar-hidden bg-game-deep">
-          {/* Hero / Featured section */}
-          {activeCategory === 'Tất cả' && activeType === 'Tất cả' && searchTerm === '' && (
-            <div className="relative h-[calc(100vh-4rem)] overflow-hidden">
-              {featuredGame?.image ? (
+          {activeCategory === 'Tất cả' && activeType === 'Tất cả' && searchTerm === '' && featuredGame && (
+            <div className="relative h-[calc(100vh-4rem)] overflow-hidden group/banner">
+              {featuredGame.image ? (
                 <img
+                  key={featuredGame.id} 
                   src={featuredGame.image}
                   alt={featuredGame.title}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover animate-fade-in"
                 />
               ) : (
                 <div className="w-full h-full bg-game-surface" />
@@ -259,7 +292,7 @@ export default function MenuGame() {
                 <div className="max-w-xl animate-fade-in-up">
                   <div className="flex items-center gap-2 mb-4">
                     <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded bg-game-neon/20 text-game-neon border border-game-neon/30">
-                      Game nổi bật
+                      Đại diện thể loại
                     </span>
                     <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded bg-white/10 text-white/70">
                       {featuredGame.category}
@@ -268,9 +301,14 @@ export default function MenuGame() {
                   <h2 className="text-4xl md:text-5xl font-bold text-white mb-4 leading-tight tracking-tight">
                     {featuredGame.title}
                   </h2>
-                  <p className="text-sm md:text-base text-white/60 leading-relaxed mb-8 max-w-md">
-                    {featuredGame.description}
-                  </p>
+                  
+                  {/* HIỂN THỊ MÔ TẢ GỐC CỦA THỂ LOẠI */}
+                  {featuredGame.description && (
+                    <p className="text-sm md:text-base text-white/60 leading-relaxed mb-8 max-w-md line-clamp-4 min-h-[4.5rem]">
+                      {featuredGame.description}
+                    </p>
+                  )}
+                  
                   <div className="flex items-center gap-4">
                     <button
                       onClick={() => handleLaunchGame(featuredGame.title)} 
@@ -281,6 +319,29 @@ export default function MenuGame() {
                     </button>
                   </div>
                 </div>
+              </div>
+              <button 
+                onClick={handlePrevSlide}
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 border border-white/10 text-white opacity-0 group-hover/banner:opacity-100 hover:bg-game-neon hover:text-game-deep hover:border-game-neon transition-all duration-300"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <button 
+                onClick={handleNextSlide}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-black/40 border border-white/10 text-white opacity-0 group-hover/banner:opacity-100 hover:bg-game-neon hover:text-game-deep hover:border-game-neon transition-all duration-300"
+              >
+                <ChevronRight size={20} />
+              </button>
+              <div className="absolute bottom-6 right-6 flex gap-2 z-10">
+                {bannerGames.map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setCurrentSlideIndex(index)}
+                    className={`w-2 h-2 rounded-full transition-all ${
+                      index === currentSlideIndex ? 'bg-game-neon w-6' : 'bg-white/30'
+                    }`}
+                  />
+                ))}
               </div>
             </div>
           )}
