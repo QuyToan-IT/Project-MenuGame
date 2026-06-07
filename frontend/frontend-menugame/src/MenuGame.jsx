@@ -13,7 +13,7 @@ import {
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
-function toUiGame(game) {
+export function toUiGame(game) {
   const categories = game.categories ?? [];
   return {
     ...game,
